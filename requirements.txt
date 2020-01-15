@@ -4,9 +4,11 @@ numpy
 Pillow
 scikit-image
 scikit-learn
-scipy
+scipy==1.2.0
 sklearn
-tensorflow-gpu==1.4.1
+# tensorflow-gpu==1.4.1
+tensorflow-gpu==1.8.0
+
 tensorflow-tensorboard==0.4.0rc3
 fasteners
 fjcommon==0.1.69

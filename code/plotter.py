@@ -149,12 +149,11 @@ def interpolated_curve(log_dir_root, job_ids, dataset,
         plt.rc('text', usetex=True)
         plt.rc('font', family='serif', serif=['Computer Modern Roman'])
 
-
     for codec_short_name, measures_dir in CODECS[dataset].items():
         measures_dir = os.path.join(constants.OTHER_CODECS_ROOT, measures_dir)
         label = get_label_from_codec_short_name(codec_short_name)
         col, line_style, line_width = style[label]
-        assert os.path.exists(measures_dir), measures_dir
+        # assert os.path.exists(measures_dir), measures_dir
         this_grid, this_msssims = get_interpolated_values_bpg_jp2k(measures_dir, grid, metric)
         dashes = (5,1) if line_style == '--' else []
         plt.plot(this_grid, this_msssims, label=label, linewidth=line_width, color=col, dashes=dashes)
@@ -166,7 +165,7 @@ def interpolated_curve(log_dir_root, job_ids, dataset,
             dashes = (5, 1) if line_style == '--' else []
             plt.plot(*ft.unzip(data), label=name, color=col, linewidth=line_width, dashes=dashes)
 
-    for job_ids in job_ids.split(';'):  
+    for job_ids in job_ids.split(';'):
         measures_readers = get_measures_readers(log_dir_root, job_ids, dataset)
         print('\n'.join(m.p for m in measures_readers))
 
@@ -183,7 +182,6 @@ def interpolated_curve(log_dir_root, job_ids, dataset,
         col, line_style, line_width = style['Ours']
         dashes = (5, 1) if line_style == '--' else []
         plt.plot(*ft.unzip(CVPR_FIG1), label='Fig. 1', color=col, linewidth=line_width, dashes=dashes)
-
 
     plt.title('{} on {}'.format(metric.upper(), TITLES[dataset]))
     plt.xlabel('bpp', labelpad=-5)

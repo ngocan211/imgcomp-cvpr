@@ -213,7 +213,7 @@ def validate(val_dirs: ValidationDirs, images_iterator: ImagesIterator, flags: O
 
 
 def save_img(img_name, img_out, val_dirs):
-    assert img_name.endswith('.png')
+    # assert img_name.endswith('.png')
     assert img_out.ndim == 4 and img_out.shape[1] == 3, 'Expected NCHW, got {}'.format(img_out)
 
     img_dir = path.join(val_dirs.out_dir, 'imgs')
