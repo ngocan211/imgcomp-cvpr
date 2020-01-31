@@ -26,6 +26,7 @@ from val_files import ValidationDirs, MeasuresWriter
 
 import bpp_helpers
 
+import time
 
 _VALIDATION_INFO_STR = """
 - VALIDATION -------------------------------------------------------------------"""
@@ -97,9 +98,9 @@ def validate(val_dirs: ValidationDirs, images_iterator: ImagesIterator, flags: O
 
     # create fetch_dict
     fetch_dict = {
-        'bpp': bpp_val,
-        'ms-ssim': msssim_val,
-        'psnr': psnr_val,
+        # 'bpp': bpp_val,
+        # 'ms-ssim': msssim_val,
+        # 'psnr': psnr_val,
     }
 
     if flags.real_bpp:
@@ -128,12 +129,12 @@ def validate(val_dirs: ValidationDirs, images_iterator: ImagesIterator, flags: O
 
     # create session
     with tf_helpers.create_session() as sess:
-        if flags.real_bpp:
-            pred = probclass.PredictionNetwork(pc, pc_config, ae.get_centers_variable(), sess)
-            checker = probclass.ProbclassNetworkTesting(pc, ae, sess)
-            bpp_fetcher = bpp_helpers.BppFetcher(pred, checker)
+        # if flags.real_bpp:
+        #     pred = probclass.PredictionNetwork(pc, pc_config, ae.get_centers_variable(), sess)
+        #     checker = probclass.ProbclassNetworkTesting(pc, ae, sess)
+        #     bpp_fetcher = bpp_helpers.BppFetcher(pred, checker)
 
-        fetcher = sess.make_callable(fetch_dict, feed_list=[x_val_ph])
+        fetcher = sess.make_callable(fetches=fetch_dict, feed_list=[x_val_ph])
 
         last_ckpt_itr = missing_checkpoints[-1][0]
         for ckpt_itr, ckpt_path in missing_checkpoints:
@@ -154,58 +155,65 @@ def validate(val_dirs: ValidationDirs, images_iterator: ImagesIterator, flags: O
             # ----------------------------------------
             # iterate over images
             # images are padded to work with current auto encoder
+
             for img_i, (img_name, img_content) in enumerate(images_iterator.iter_imgs(pad=ae.get_subsampling_factor())):
+                start_time = time.time()
+                print('fetching  {}'.format(img_name))
+
                 otp = fetcher(img_content)
-                measures_writer.append(img_name, otp)
 
-                if flags.real_bpp:
-                    # Calculate
-                    bpp_real, bpp_theory = bpp_fetcher.get_bpp(
-                            otp['sym'], bpp_helpers.num_pixels_in_image(img_content))
+                print('fetched   {}'.format(img_name))
+                print("--- %s seconds ---" % (time.time() - start_time))
+                # measures_writer.append(img_name, otp)
 
-                    # Logging
-                    bpp_loss = otp['bpp']
-                    diff_percent_tr = (bpp_theory/bpp_real) * 100
-                    diff_percent_lt = (bpp_loss/bpp_theory) * 100
-                    print('BPP: Real         {:.5f}\n'
-                          '     Theoretical: {:.5f} [{:5.1f}% of real]\n'
-                          '     Loss:        {:.5f} [{:5.1f}% of real]'.format(
-                            bpp_real, bpp_theory, diff_percent_tr, bpp_loss, diff_percent_lt))
-                    assert abs(bpp_theory - bpp_loss) < 1e-3, 'Expected bpp_theory to match loss! Got {} and {}'.format(
-                            bpp_theory, bpp_loss)
+                # if flags.real_bpp:
+                #     # Calculate
+                #     bpp_real, bpp_theory = bpp_fetcher.get_bpp(
+                #             otp['sym'], bpp_helpers.num_pixels_in_image(img_content))
+                #
+                #     # Logging
+                #     bpp_loss = otp['bpp']
+                #     diff_percent_tr = (bpp_theory/bpp_real) * 100
+                #     diff_percent_lt = (bpp_loss/bpp_theory) * 100
+                #     print('BPP: Real         {:.5f}\n'
+                #           '     Theoretical: {:.5f} [{:5.1f}% of real]\n'
+                #           '     Loss:        {:.5f} [{:5.1f}% of real]'.format(
+                #             bpp_real, bpp_theory, diff_percent_tr, bpp_loss, diff_percent_lt))
+                #     assert abs(bpp_theory - bpp_loss) < 1e-3, 'Expected bpp_theory to match loss! Got {} and {}'.format(
+                #             bpp_theory, bpp_loss)
 
                 if flags.save_ours and ckpt_itr == last_ckpt_itr:
                     save_img(img_name, otp['img_out'], val_dirs)
 
                 values_aggregator.update(otp)
 
-                print('{: 10d} {img_name} | Mean: {avgs}'.format(
-                        img_i, img_name=img_name, avgs=values_aggregator.averages_str()),
-                      end=('\r' if not flags.real_bpp else '\n'), flush=True)
+                # print('{: 10d} {img_name} | Mean: {avgs}'.format(
+                #         img_i, img_name=img_name, avgs=values_aggregator.averages_str()),
+                #       end=('\r' if not flags.real_bpp else '\n'), flush=True)
 
             measures_writer.close()
 
-            print()  # add newline
-            avgs = values_aggregator.averages()
-            avg_bpp, avg_ms_ssim, avg_psnr = avgs['bpp'], avgs['ms-ssim'], avgs['psnr']
+            # print()  # add newline
+            # avgs = values_aggregator.averages()
+            # avg_bpp, avg_ms_ssim, avg_psnr = avgs['bpp'], avgs['ms-ssim'], avgs['psnr']
+            #
+            # tf_helpers.log_values(fw,
+            #                       [(full_summary_tag('avg_bpp'), avg_bpp),
+            #                        (full_summary_tag('avg_ms_ssim'), avg_ms_ssim),
+            #                        (full_summary_tag('avg_psnr'), avg_psnr)],
+            #                       iteration=ckpt_itr)
 
-            tf_helpers.log_values(fw,
-                                  [(full_summary_tag('avg_bpp'), avg_bpp),
-                                   (full_summary_tag('avg_ms_ssim'), avg_ms_ssim),
-                                   (full_summary_tag('avg_psnr'), avg_psnr)],
-                                  iteration=ckpt_itr)
-
-            if codec_distance_ms_ssim and codec_distance_psnr:
-                try:
-                    d_ms_ssim = codec_distance_ms_ssim.distance(avg_bpp, avg_ms_ssim)
-                    d_pnsr = codec_distance_psnr.distance(avg_bpp, avg_psnr)
-                    print('Distance to BPG: {:.3f} ms-ssim // {:.3f} psnr'.format(d_ms_ssim, d_pnsr))
-                    tf_helpers.log_values(fw,
-                                          [(full_summary_tag('distance_BPG_MS-SSIM'), d_ms_ssim),
-                                           (full_summary_tag('distance_BPG_PSNR'),    d_pnsr)],
-                                          iteration=ckpt_itr)
-                except ValueError as e:  # out of range errors from distance calls
-                    print(e)
+            # if codec_distance_ms_ssim and codec_distance_psnr:
+            #     try:
+            #         d_ms_ssim = codec_distance_ms_ssim.distance(avg_bpp, avg_ms_ssim)
+            #         d_pnsr = codec_distance_psnr.distance(avg_bpp, avg_psnr)
+            #         print('Distance to BPG: {:.3f} ms-ssim // {:.3f} psnr'.format(d_ms_ssim, d_pnsr))
+            #         tf_helpers.log_values(fw,
+            #                               [(full_summary_tag('distance_BPG_MS-SSIM'), d_ms_ssim),
+            #                                (full_summary_tag('distance_BPG_PSNR'),    d_pnsr)],
+            #                               iteration=ckpt_itr)
+            #     except ValueError as e:  # out of range errors from distance calls
+            #         print(e)
 
             val_dirs.add_validated_checkpoint(ckpt_itr)
 
@@ -222,6 +230,7 @@ def save_img(img_name, img_out, val_dirs):
     img_out_p = path.join(img_dir, img_name)
     print('Saving {}...'.format(img_out_p))
     imageio.imsave(img_out_p, img_out)
+    print('Saved  {}...'.format(img_out_p))
 
 
 def psnr_np(img1, img2):

@@ -51,6 +51,7 @@ def _read_if_not_array(im):
         return scipy.ndimage.imread(im)
     return im
 
+
 def compare_msssim(inp_img_batched, out_img_batched):
     return MultiScaleSSIM(inp_img_batched, out_img_batched)
 
