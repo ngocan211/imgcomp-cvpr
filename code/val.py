@@ -161,6 +161,15 @@ def validate(val_dirs: ValidationDirs, images_iterator: ImagesIterator, flags: O
                 print('fetching  {}'.format(img_name))
 
                 otp = fetcher(img_content)
+                # tf.summary.FileWriter("mylog2", sess.graph)
+                output_graph_def = tf.graph_util.convert_variables_to_constants(
+                    sess,  # The session is used to retrieve the weights
+                    tf.get_default_graph().as_graph_def(),  # The graph_def is used to retrieve the nodes
+                    ["x_out_val_uint8"]  # The output node names are used to select the usefull nodes
+                )
+                with tf.gfile.GFile("frozen_model.pb", "wb") as f:
+                    f.write(output_graph_def.SerializeToString())
+                measures_writer.append(img_name, otp)
 
                 print('fetched   {}'.format(img_name))
                 print("--- %s seconds ---" % (time.time() - start_time))
@@ -295,14 +304,11 @@ def main():
         print('Unknown flags: {}'.format(unknown_flags))
 
     image_paths, dataset_name = val_images.get_image_paths(flags.images)
-    images_iterator = ImagesIterator(image_paths[:flags.how_many], dataset_name, flags.image_cache_max)
-    val_flags = OutputFlags(flags.save_ours, flags.ckpt_step, flags.real_bpp)
-
     for ckpt_dir in logdir_helpers.iter_ckpt_dirs(flags.log_dir_root, flags.job_ids):
         try:
             validate(ValidationDirs(ckpt_dir, flags.log_dir_root, dataset_name, flags.reset),
-                     images_iterator,
-                     val_flags)
+                     ImagesIterator(image_paths[:flags.how_many], dataset_name, flags.image_cache_max),
+                     OutputFlags(flags.save_ours, flags.ckpt_step, flags.real_bpp))
         except tf.errors.NotFoundError as e:
             # happens if ckpt was deleted while validation
             print('*** Caught {}'.format(e))
